@@ -1,37 +1,36 @@
-"""
-    A set of tools to be used for wikipedia document clustering.
-"""
+""" A set of tools to be used for wikipedia document clustering. """
 
 from __future__ import print_function
 
 import os
 import sys
 import shutil
-import xml.etree.ElementTree as ET
 import itertools
-import nltk
 import re
-import numpy as np
+import time
+from optparse import OptionParser
+import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-from sklearn.externals import joblib
-from nltk.stem.snowball import SnowballStemmer
 from sklearn.feature_extraction.text import TfidfVectorizer
-from optparse import OptionParser
-from xml.sax.saxutils import escape
+from sklearn.pipeline import make_pipeline
+from sklearn.externals import joblib
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import Normalizer
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, silhouette_samples
+import numpy as np
+import nltk
+from nltk.stem.snowball import SnowballStemmer
 
-def tokenize (text):
-    """
-    Takes a String as input and returns a list of its tokens
-    """
+def tokenize(text):
+    """ Takes a String as input and returns a list of its tokens. """
+
     filtered_tokens = []
-    tokens = [word.lower() for sent in nltk.sent_tokenize(text)
-                               for word in nltk.word_tokenize(sent)]
+    tokens = [word.lower() for sent in nltk.sent_tokenize(text) for word in
+              nltk.word_tokenize(sent)]
     # Remove tokens that do not contain letters.
     for token in tokens:
         if re.search('[a-zA-Z]', token):
@@ -39,16 +38,12 @@ def tokenize (text):
     return filtered_tokens
 
 def stem(tokens):
-    """
-    Takes a list of tokens as input and stems each entry.
-    """
+    """ Takes a list of tokens as input and stems each entry. """
     stemmer = SnowballStemmer('english')
     return [stemmer.stem(token) for token in tokens]
 
 def tokenizer(text):
-    """
-    Tokenizes and then stems a given text.
-    """
+    """ Tokenizes and then stems a given text. """
     return stem(tokenize(text))
 
 
@@ -69,23 +64,18 @@ class Corpus(object):
         self.document_paths = self.get_document_paths()
 
     def get_document_paths(self):
-        """
-        Returns a list of the filepaths to all the documents in the corpus.
-        """
+        """ Returns a list of the filepaths to all the documents in the corpus."""
         document_paths = []
         for document_folder in os.listdir(self.formatted_corpus_file_path):
             for document_file in os.listdir(self.formatted_corpus_file_path + '/'
-                                           + document_folder):
+                                            + document_folder):
                 document_paths.append(self.formatted_corpus_file_path
-                                         + '/' + document_folder + '/' + document_file)
+                                      + '/' + document_folder + '/' + document_file)
         return document_paths
 
     def format(self):
-        """
-        Change the format of the corpus file to one document per file.
-        """
+        """ Change the format of the corpus file to one document per file."""
         print('Formatting corpus\n')
-        document_paths = []
         # If a formatted directory already exists, overwrite it.
         if os.path.exists(self.formatted_corpus_file_path):
             shutil.rmtree(self.formatted_corpus_file_path)
@@ -98,28 +88,29 @@ class Corpus(object):
                 # The document's XML like format does not have a root element so it
                 # needs to be added in order for the ElementTree to be created.
                 with open(self.corpus_file_path + '/' + document_folder + '/'
-                         + document_file) as f:
+                          + document_file) as document_file_content:
                     # Escape all lines except <doc> tag lines to avoid XML parsing
                     # errors
-                    f_escaped = []
-                    for line in f.readlines():
+                    document_file_content_escaped = []
+                    for line in document_file_content.readlines():
                         if (not line.startswith('<doc id')
                                 and not line.startswith('</doc>')):
-                            f_escaped.append(escape(line))
+                            document_file_content_escaped.append(escape(line))
                         else:
-                            f_escaped.append(line)
+                            document_file_content_escaped.append(line)
 
-                    it = itertools.chain('<root>', f_escaped, '</root>')
+                    document_file_iterator = \
+                            itertools.chain('<root>', document_file_content_escaped, '</root>')
                     # Parse the document file using the iterable.
-                    documents = ET.fromstringlist(it)
+                    documents = ET.fromstringlist(document_file_iterator)
                 # Each document file contains multiple documents each wrapped in a
                 # doc tag
                 for i, doc in enumerate(documents.findall("doc")):
                     # Save each document in a separate file.
                     filepath = '/'.join([self.formatted_corpus_file_path, document_folder,
-                                       document_file + '_' + str(i)])
+                                         document_file + '_' + str(i)])
                     with open(filepath, 'w+') as output_document_file:
-                           output_document_file.write(doc.text)
+                        output_document_file.write(doc.text)
                     # If a subcollection size has been specified, stop when it is
                     # reached
                     n_docs += 1
@@ -131,8 +122,8 @@ class Corpus(object):
         Yields the documents of the corpus in String form.
         """
         for path in self.document_paths:
-            with open(path) as f:
-                yield f.read()[:2000]
+            with open(path) as document_file_content:
+                yield document_file_content.read()[:2000]
 
     def get_vocabulary(self):
         """
@@ -145,7 +136,7 @@ class Corpus(object):
         corpus = self.document_generator()
 
         for document in corpus:
-            document_tokens = self.tokenize(document)
+            document_tokens = tokenize(document)
             vocabulary_tokenized.extend(document_tokens)
             # Remove duplicate tokens by casting to set and back to list.
             vocabulary_tokenized = list(set(vocabulary_tokenized))
@@ -170,14 +161,15 @@ class ClusterMaker(object):
         """
         Applies kmeans clustering on the corpus and returns the kmeans model.
         """
+        start_time = time.time()
         print("DEBUG Making cluster model")
         # Initialize the vectorizer.
         vectorizer = TfidfVectorizer(max_df=0.5, min_df=2, max_features=10000,
                                      use_idf=True, stop_words='english',
-                                     tokenizer=tokenize, ngram_range=(1, 3))
+                                     tokenizer=tokenizer, ngram_range=(1, 3))
         print("DEBUG Created vectorizer")
         # Compute the Tf/Idf matrix of the corpus.
-        tfidf_matrix = vectorizer.fit_transform(corpus)
+        tfidf_matrix = vectorizer.fit_transform(corpus.document_generator())
         print("DEBUG Computed tfidf")
 
         # Apply latent semantic analysis.
@@ -191,63 +183,45 @@ class ClusterMaker(object):
             print('DEBUG LSA completed')
 
         # Do the clustering.
-        km = KMeans(self.n_clusters, init='k-means++', n_init=1, max_iter=100,
-                   verbose=True)
-        print('Clustering with %s' % km)
-        km.fit(tfidf_matrix)
-        cluster_labels = km.labels_
-        # Calculate silhouette coefficient as a metric of the clustering.
-        silhouette_avg = silhouette_score(tfidf_matrix, cluster_labels)
-        silhouette_values = silhouette_samples(tfidf_matrix, cluster_labels)
+        kmodel = KMeans(self.n_clusters, init='k-means++', n_init=1, max_iter=100,
+                        verbose=True)
+        print('Clustering with %s' % kmodel)
+        kmodel.fit(tfidf_matrix)
+        print("Cluster model created in %d'" % ((time.time()-start_time) / 60))
+        joblib.dump(kmodel, 'kmodel.pkl')
+        #  cluster_labels = kmodel.labels_
+        #  cluster_centers = kmodel.cluster_centers_
 
         # Print some info.
         print("Top terms per cluster:")
         if self.n_dimensions != None:
-            original_space_centroids = svd.inverse_transform(km.cluster_centers_)
+            original_space_centroids = svd.inverse_transform(kmodel.cluster_centers_)
             order_centroids = original_space_centroids.argsort()[:, ::-1]
         else:
-            order_centroids = km.cluster_centers_.argsort()[:, ::-1]
+            order_centroids = kmodel.cluster_centers_.argsort()[:, ::-1]
 
-            terms = vectorizer.get_feature_names()
-            for i in range(self.n_clusters):
-                print("Cluster %d:" % i, end='')
-                for ind in order_centroids[i, :10]:
-                    print(' %s' % terms[ind], end='')
-                    print()
+        terms = vectorizer.get_feature_names()
+        for i in range(self.n_clusters):
+            print("Cluster %d:" % i, end='')
+            for ind in order_centroids[i, :10]:
+                print(' %s' % terms[ind], end='')
+                print()
 
-        # Dump the k-means model.
-        joblib.dump(km, 'km.pkl')
-        # Dump some necessary info for visualization.
-        joblib.dump([len(tfidf_matrix), silhouette_avg, silhouette_score],
-                   'cluster_info.pkl')
-        return km, cluster_info
+        return kmodel
 
-    def visualize(km, vocabulary):
-        """
-        Generates a 2D visualization of the cluster data of a given k-means model.
-        """
-        # Create 2 subplots in the same row.
-        fig, (ax1, ax2) = plt.subplots(1, 2)
-        fig.set_size_inches(18, 7)
-
-        # The first subplot is the silhouette plot. Silhouette coefficient values range
-        # from -1 to 1.
-        ax1.set_xlim([-1, 1])
 
 def main():
-    """
-    Method used for testing, it will be removed after module is completed
-    """
+    """ Method used for testing, it will be removed after module is completed. """
     # Configure option parsing.
     usage = "Usage: toolset.py <corpus> [options]"
     parser = OptionParser(usage)
     parser.add_option('--format', help='Format the corpus.',
-                     dest='format_corpus', action='store_true', default=False,
-                     metavar='BOOLEAN')
+                      dest='format_corpus', action='store_true', default=False,
+                      metavar='BOOLEAN')
     parser.add_option('--format-sub', help='Format a subcollection of the corpus.',
-                     dest='sub_size', action='store', type='int', metavar='INTEGER')
+                      dest='sub_size', action='store', type='int', metavar='INTEGER')
     parser.add_option('--lsa', help='Reduce dimensions using latent semantic analysis',
-                     dest='n_dimensions', action='store', type='int')
+                      dest='n_dimensions', action='store', type='int')
     (options, args) = parser.parse_args()
 
     if not os.path.exists(args[0]):
@@ -255,10 +229,11 @@ def main():
         sys.exit(1)
 
     corpus = Corpus(args[0], options.format_corpus or options.sub_size,
-                   options.sub_size)
-    cmaker = ClusterMaker(8)
-    km, cluster_info = cmaker.make(corpus.document_generator())
-    print(cluster_info)
+                    options.sub_size)
+    cmaker = ClusterMaker(8, options.n_dimensions)
+    kmodel = cmaker.make(corpus)
+    # Dump the k-means model.
+    joblib.dump(kmodel, 'km.pkl')
 
 if __name__ == "__main__":
     main()
