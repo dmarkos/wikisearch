@@ -8,22 +8,37 @@ import shutil
 import itertools
 import re
 import time
+<<<<<<< HEAD
 import math
+=======
+>>>>>>> refs/remotes/origin/master
 from optparse import OptionParser
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 import pandas as pd
+<<<<<<< HEAD
+=======
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+>>>>>>> refs/remotes/origin/master
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import make_pipeline
 from sklearn.externals import joblib
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import Normalizer
 from sklearn.cluster import KMeans
+<<<<<<< HEAD
+=======
+from sklearn.metrics import silhouette_score, silhouette_samples
+>>>>>>> refs/remotes/origin/master
 import numpy as np
 import nltk
 from nltk.stem.snowball import SnowballStemmer
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> refs/remotes/origin/master
 def tokenize(text):
     """ Takes a String as input and returns a list of its tokens. """
 
@@ -156,6 +171,7 @@ class ClusterMaker(object):
         self.n_clusters = n_clusters
         self.n_dimensions = n_dimensions
 
+<<<<<<< HEAD
     def make(self, corpus, load_tfidf=False):
         """ Applies kmeans clustering on the corpus and returns the kmeans model."""
         print("DEBUG Making cluster model")
@@ -176,6 +192,22 @@ class ClusterMaker(object):
         else:
             [vectorizer, tfidf_matrix] = joblib.load('tfidf.pkl')
             print('Loaded Tf/Idf matrix.')
+=======
+    def make(self, corpus):
+        """
+        Applies kmeans clustering on the corpus and returns the kmeans model.
+        """
+        start_time = time.time()
+        print("DEBUG Making cluster model")
+        # Initialize the vectorizer.
+        vectorizer = TfidfVectorizer(max_df=0.5, min_df=2, max_features=10000,
+                                     use_idf=True, stop_words='english',
+                                     tokenizer=tokenizer, ngram_range=(1, 3))
+        print("DEBUG Created vectorizer")
+        # Compute the Tf/Idf matrix of the corpus.
+        tfidf_matrix = vectorizer.fit_transform(corpus.document_generator())
+        print("DEBUG Computed tfidf")
+>>>>>>> refs/remotes/origin/master
 
         # Apply latent semantic analysis.
         if self.n_dimensions != None:
@@ -185,16 +217,26 @@ class ClusterMaker(object):
             normalizer = Normalizer(copy=False)
             lsa = make_pipeline(svd, normalizer)
             tfidf_matrix = lsa.fit_transform(tfidf_matrix)
+<<<<<<< HEAD
             print(tfidf_matrix.shape)
             print('DEBUG LSA completed')
 
         # Do the clustering.
         start_time = time.time()
+=======
+            print('DEBUG LSA completed')
+
+        # Do the clustering.
+>>>>>>> refs/remotes/origin/master
         kmodel = KMeans(self.n_clusters, init='k-means++', n_init=1, max_iter=100,
                         verbose=True)
         print('Clustering with %s' % kmodel)
         kmodel.fit(tfidf_matrix)
+<<<<<<< HEAD
         end_time = time.time()
+=======
+        print("Cluster model created in %d'" % ((time.time()-start_time) / 60))
+>>>>>>> refs/remotes/origin/master
         joblib.dump(kmodel, 'kmodel.pkl')
         #  cluster_labels = kmodel.labels_
         #  cluster_centers = kmodel.cluster_centers_
@@ -213,9 +255,13 @@ class ClusterMaker(object):
             for ind in order_centroids[i, :10]:
                 print(' %s' % terms[ind], end='')
                 print()
+<<<<<<< HEAD
         print(str(end_time-start_time))
         print('Clustering completed after ' + str(round((end_time-start_time)/60)) + "' " 
                 + str(round((end_time-start_time)%60)) + "''")
+=======
+
+>>>>>>> refs/remotes/origin/master
         return kmodel
 
 
@@ -224,6 +270,7 @@ def main():
     # Configure option parsing.
     usage = "Usage: toolset.py <corpus> [options]"
     parser = OptionParser(usage)
+<<<<<<< HEAD
     parser.add_option('--format', help='Format the corpus and apply kmeans clustering.',
                       dest='format_corpus', action='store_true', default=False,
                       metavar='BOOLEAN')
@@ -235,6 +282,15 @@ def main():
     parser.add_option('--load-tfidf', help='Kmeans clustering with pre-computed Tf/Idf matrix',
                       dest='load_tfidf', action='store_true', default=False,
                       metavar='BOOLEAN')
+=======
+    parser.add_option('--format', help='Format the corpus.',
+                      dest='format_corpus', action='store_true', default=False,
+                      metavar='BOOLEAN')
+    parser.add_option('--format-sub', help='Format a subcollection of the corpus.',
+                      dest='sub_size', action='store', type='int', metavar='INTEGER')
+    parser.add_option('--lsa', help='Reduce dimensions using latent semantic analysis',
+                      dest='n_dimensions', action='store', type='int')
+>>>>>>> refs/remotes/origin/master
     (options, args) = parser.parse_args()
 
     if not os.path.exists(args[0]):
@@ -243,9 +299,14 @@ def main():
 
     corpus = Corpus(args[0], options.format_corpus or options.sub_size,
                     options.sub_size)
+<<<<<<< HEAD
     start_time = time.time()
     cmaker = ClusterMaker(10, options.n_dimensions)
     kmodel = cmaker.make(corpus, load_tfidf=options.load_tfidf)
+=======
+    cmaker = ClusterMaker(8, options.n_dimensions)
+    kmodel = cmaker.make(corpus)
+>>>>>>> refs/remotes/origin/master
     # Dump the k-means model.
     joblib.dump(kmodel, 'km.pkl')
 
