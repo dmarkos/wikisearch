@@ -8,8 +8,6 @@ import shutil
 import itertools
 import re
 import time
-import math
-from optparse import OptionParser
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 import pandas as pd
@@ -19,9 +17,13 @@ from sklearn.externals import joblib
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import Normalizer
 from sklearn.cluster import KMeans
-import numpy as np
+#import numpy as np
 import nltk
 from nltk.stem.snowball import SnowballStemmer
+import click
+
+
+CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
 
 def tokenize(text):
@@ -47,19 +49,14 @@ def tokenizer(text):
 
 
 class Corpus(object):
-    """
-    A Corpus object is initiated on a collection of documents extracted from a
-    wikipedia dump and provides methods for handling the documents.
+    """ A Corpus object is initiated on a collection of documents extracted from a
+        wikipedia dump and provides methods for handling the documents.
     """
 
-    def __init__(self, corpus_file_path, format_corpus, sub_size):
+    def __init__(self, corpus_file_path):
         self.corpus_file_path = corpus_file_path
         self.formatted_corpus_file_path = os.getcwd() + "/formatted"
-        self.format_corpus = format_corpus
-        self.sub_size = sub_size
         # Format the corpus if it's not already formatted.
-        if self.format_corpus:
-            self.format()
         self.document_paths = self.get_document_paths()
 
     def get_document_paths(self):
@@ -72,10 +69,10 @@ class Corpus(object):
                                       + '/' + document_folder + '/' + document_file)
         return document_paths
 
-    def format(self):
+    def format(self, sub_size=None):
         """ Change the format of the corpus file to one document per file."""
         print('Formatting corpus\n')
-        # If a formatted directory already exists, overwrite it.
+        # If a formatted collection directory already exists, overwrite it.
         if os.path.exists(self.formatted_corpus_file_path):
             shutil.rmtree(self.formatted_corpus_file_path)
             os.makedirs(self.formatted_corpus_file_path)
@@ -113,7 +110,7 @@ class Corpus(object):
                     # If a subcollection size has been specified, stop when it is
                     # reached
                     n_docs += 1
-                    if self.sub_size != None and n_docs >= self.sub_size:
+                    if sub_size != None and n_docs >= sub_size:
                         return 0
 
     def document_generator(self):
@@ -156,25 +153,35 @@ class ClusterMaker(object):
         self.n_clusters = n_clusters
         self.n_dimensions = n_dimensions
 
-    def make(self, corpus, load_tfidf=False):
+    @staticmethod
+    def extract_tfidf(corpus):
+        """ Returns the Tf/Idf matrix of the corpus and pickles Tf/Idf matrix and feature list."""
+        # Initialize the vectorizer.
+        vectorizer = TfidfVectorizer(max_df=0.5, min_df=2, max_features=10000,
+                                     use_idf=True, stop_words='english',
+                                     tokenizer=tokenizer, ngram_range=(1, 3))
+        print("DEBUG Created vectorizer")
+        # Compute the Tf/Idf matrix of the corpus.
+        tfidf_matrix = vectorizer.fit_transform(corpus.document_generator())
+        # Get feature names from the fitted vectorizer.
+        features = vectorizer.get_feature_names()
+        print(tfidf_matrix.shape)
+        print("DEBUG Computed tfidf")
+        joblib.dump(tfidf_matrix, 'tfidf.pkl')
+        joblib.dump(features, 'features.pkl')
+        return tfidf_matrix
+
+    def kmeans(self, corpus=None, tfidf_path=None):
         """ Applies kmeans clustering on the corpus and returns the kmeans model."""
         print("DEBUG Making cluster model")
 
         # Compute or load Tf/Idf matrix.
-        if not load_tfidf:
-            # Initialize the vectorizer.
-            vectorizer = TfidfVectorizer(max_df=0.5, min_df=2, max_features=10000,
-                                         use_idf=True, stop_words='english',
-                                         tokenizer=tokenizer, ngram_range=(1, 3))
-            print("DEBUG Created vectorizer")
-            # Compute the Tf/Idf matrix of the corpus.
-            tfidf_matrix = vectorizer.fit_transform(corpus.document_generator())
+        if tfidf_path is None:
+            tfidf_matrix = self.extract_tfidf(corpus)
             print(tfidf_matrix.shape)
-            print("DEBUG Computed tfidf")
-            joblib.dump([vectorizer, tfidf_matrix], 'tfidf.pkl')
-            print('Saved Tf/Idf matrix to tfidf.pkl')
         else:
-            [vectorizer, tfidf_matrix] = joblib.load('tfidf.pkl')
+            tfidf_matrix = joblib.load('tfidf.pkl')
+            print(tfidf_matrix.shape)
             print('Loaded Tf/Idf matrix.')
 
         # Apply latent semantic analysis.
@@ -207,48 +214,68 @@ class ClusterMaker(object):
         else:
             order_centroids = kmodel.cluster_centers_.argsort()[:, ::-1]
 
-        terms = vectorizer.get_feature_names()
+        features = joblib.load('features.pkl')
         for i in range(self.n_clusters):
             print("Cluster %d:" % i, end='')
             for ind in order_centroids[i, :10]:
-                print(' %s' % terms[ind], end='')
+                print(' %s' % features[ind], end='')
                 print()
         print(str(end_time-start_time))
-        print('Clustering completed after ' + str(round((end_time-start_time)/60)) + "' " 
-                + str(round((end_time-start_time)%60)) + "''")
+        print('Clustering completed after ' + str(round((end_time-start_time)/60)) + "' "
+              + str(round((end_time-start_time)%60)) + "''")
         return kmodel
 
 
-def main():
-    """ Method used for testing, it will be removed after module is completed. """
-    # Configure option parsing.
-    usage = "Usage: toolset.py <corpus> [options]"
-    parser = OptionParser(usage)
-    parser.add_option('--format', help='Format the corpus and apply kmeans clustering.',
-                      dest='format_corpus', action='store_true', default=False,
-                      metavar='BOOLEAN')
-    parser.add_option('--format-sub',
-                      help='Format a subcollection of the corpus and apply kmeans clustering.',
-                      dest='sub_size', action='store', type='int', metavar='INTEGER')
-    parser.add_option('--lsa', help='Reduce dimensions using latent semantic analysis',
-                      dest='n_dimensions', action='store', type='int')
-    parser.add_option('--load-tfidf', help='Kmeans clustering with pre-computed Tf/Idf matrix',
-                      dest='load_tfidf', action='store_true', default=False,
-                      metavar='BOOLEAN')
-    (options, args) = parser.parse_args()
+@click.group(context_settings=CONTEXT_SETTINGS)
+def cli():
+    """ Command line interface for toolset.py."""
+    pass
 
-    if not os.path.exists(args[0]):
+@cli.command()
+@click.argument('corpus')
+@click.option('--sub_size', default=None, type=int,
+              help='Set the number of formatted documents.')
+def format_corpus(**kwargs):
+    """ Click command to format the corpus."""
+    if not os.path.exists(kwargs['corpus']):
         print('File does not exist.')
         sys.exit(1)
+    print('Formatting collection.')
+    corpus = Corpus(kwargs['corpus'])
+    corpus.format(kwargs['sub_size'])
 
-    corpus = Corpus(args[0], options.format_corpus or options.sub_size,
-                    options.sub_size)
-    start_time = time.time()
-    cmaker = ClusterMaker(10, options.n_dimensions)
-    kmodel = cmaker.make(corpus, load_tfidf=options.load_tfidf)
-    # Dump the k-means model.
-    joblib.dump(kmodel, 'km.pkl')
+@cli.command()
+@click.argument('corpus')
+def extract_tfidf(**kwargs):
+    """ Click command to extract Tf/Idf matrix."""
+    if not os.path.exists(kwargs['corpus']):
+        print('File does not exist.')
+        sys.exit(1)
+    corpus = Corpus(kwargs['corpus'])
+    ClusterMaker.extract_tfidf(corpus)
+
+@cli.command()
+@click.argument('corpus')
+@click.option('--tfidf', default=None,
+              help='Use a pre-computed Tf/Idf matrix')
+@click.option('--n_dimensions', default=None, type=int,
+              help='Reduce dimensions using Latent Semantic Analysis.')
+@click.option('--n_clusters', default=10,
+              help='Set number of clusters.')
+def kmeans(**kwargs):
+    """ Click command to apply kmeans clustering."""
+    corpus = Corpus(kwargs['corpus'])
+    if kwargs['tfidf'] is None:
+        cmaker = ClusterMaker(kwargs['n_clusters'], kwargs['n_dimensions'])
+        kmodel = cmaker.kmeans(corpus=corpus, tfidf_path=kwargs['tfidf'])
+        # Dump the k-means model.
+        joblib.dump(kmodel, 'km.pkl')
+    else:
+        cmaker = ClusterMaker(kwargs['n_clusters'], kwargs['n_dimensions'])
+        kmodel = cmaker.kmeans(corpus=corpus, tfidf_path=kwargs['tfidf'])
+        # Dump the k-means model.
+        joblib.dump(kmodel, 'km.pkl')
 
 if __name__ == "__main__":
-    main()
+    cli()
 
