@@ -55,31 +55,28 @@ class Corpus(object):
 
     def __init__(self, corpus_file_path):
         self.corpus_file_path = corpus_file_path
-        self.formatted_corpus_file_path = os.getcwd() + "/formatted"
-        # Format the corpus if it's not already formatted.
         self.document_paths = self.get_document_paths()
 
     def get_document_paths(self):
         """ Returns a list of the filepaths to all the documents in the corpus."""
         document_paths = []
-        for document_folder in os.listdir(self.formatted_corpus_file_path):
-            for document_file in os.listdir(self.formatted_corpus_file_path + '/'
+        for document_folder in os.listdir(self.corpus_file_path):
+            for document_file in os.listdir(self.corpus_file_path + '/'
                                             + document_folder):
-                document_paths.append(self.formatted_corpus_file_path
+                document_paths.append(self.corpus_file_path
                                       + '/' + document_folder + '/' + document_file)
         return document_paths
 
-    def format(self, sub_size=None):
+    def format(self, sub_size=None, output_file_path=os.getcwd() + "/formatted"):
         """ Change the format of the corpus file to one document per file."""
-        print('Formatting corpus\n')
         # If a formatted collection directory already exists, overwrite it.
-        if os.path.exists(self.formatted_corpus_file_path):
-            shutil.rmtree(self.formatted_corpus_file_path)
-            os.makedirs(self.formatted_corpus_file_path)
+        if os.path.exists(output_file_path):
+            shutil.rmtree(output_file_path)
+            os.makedirs(output_file_path)
         n_docs = 0
 
         for document_folder in os.listdir(self.corpus_file_path):
-            os.makedirs(self.formatted_corpus_file_path + '/' + document_folder)
+            os.makedirs(output_file_path + '/' + document_folder)
             for document_file in os.listdir(self.corpus_file_path + '/' + document_folder):
                 # The document's XML like format does not have a root element so it
                 # needs to be added in order for the ElementTree to be created.
@@ -103,7 +100,7 @@ class Corpus(object):
                 # doc tag
                 for i, doc in enumerate(documents.findall("doc")):
                     # Save each document in a separate file.
-                    filepath = '/'.join([self.formatted_corpus_file_path, document_folder,
+                    filepath = '/'.join([output_file_path, document_folder,
                                          document_file + '_' + str(i)])
                     with open(filepath, 'w+') as output_document_file:
                         output_document_file.write(doc.text)
@@ -235,23 +232,30 @@ def cli():
 @click.argument('corpus')
 @click.option('--sub_size', default=None, type=int,
               help='Set the number of formatted documents.')
+@click.option('-o', default=None, type=str,
+              help='Set output file path.')
 def format_corpus(**kwargs):
-    """ Click command to format the corpus."""
-    if not os.path.exists(kwargs['corpus']):
-        print('File does not exist.')
+    """ Command to format the corpus."""
+    if not os.path.exists(os.path.abspath(kwargs['corpus'])):
+        print(os.path.abspath(kwargs['corpus']) + ' does not exist.')
         sys.exit(1)
-    print('Formatting collection.')
-    corpus = Corpus(kwargs['corpus'])
-    corpus.format(kwargs['sub_size'])
+
+    if not os.path.exists(os.path.abspath(kwargs['o'])):
+        print(os.path.abspath(kwargs['o']) + ' does not exist.')
+        sys.exit(1)
+
+    corpus = Corpus(os.path.abspath(kwargs['corpus']))
+    corpus.format(kwargs['sub_size'], os.path.abspath(kwargs['o']))
 
 @cli.command()
 @click.argument('corpus')
 def extract_tfidf(**kwargs):
     """ Click command to extract Tf/Idf matrix."""
-    if not os.path.exists(kwargs['corpus']):
-        print('File does not exist.')
+    if not os.path.exists(os.path.abspath(kwargs['corpus'])):
+        print(os.path.abspath(kwargs['corpus']) + ' does not exist.')
         sys.exit(1)
-    corpus = Corpus(kwargs['corpus'])
+
+    corpus = Corpus(os.path.abspath(kwargs['corpus']))
     ClusterMaker.extract_tfidf(corpus)
 
 @cli.command()
@@ -264,7 +268,11 @@ def extract_tfidf(**kwargs):
               help='Set number of clusters.')
 def kmeans(**kwargs):
     """ Click command to apply kmeans clustering."""
-    corpus = Corpus(kwargs['corpus'])
+    if not os.path.exists(os.path.abspath(kwargs['corpus'])):
+        print(os.path.abspath(kwargs['corpus']) + ' does not exist.')
+        sys.exit(1)
+
+    corpus = Corpus(os.path.abspath(kwargs['corpus']))
     if kwargs['tfidf'] is None:
         cmaker = ClusterMaker(kwargs['n_clusters'], kwargs['n_dimensions'])
         kmodel = cmaker.kmeans(corpus=corpus, tfidf_path=kwargs['tfidf'])
