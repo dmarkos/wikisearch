@@ -25,6 +25,10 @@ import click
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
+@click.group(context_settings=CONTEXT_SETTINGS)
+def cli():
+    """ Command line interface for toolset.py."""
+    pass
 
 def tokenize(text):
     """ Takes a String as input and returns a list of its tokens. """
@@ -47,17 +51,16 @@ def tokenizer(text):
     """ Tokenizes and then stems a given text. """
     return stem(tokenize(text))
 
-
 class Corpus(object):
-    """ A Corpus object is initiated on a collection of documents extracted from a
+    """ Initialized using a collection of documents extracted from a
         wikipedia dump and provides methods for handling the documents.
     """
 
     def __init__(self, corpus_file_path):
         self.corpus_file_path = corpus_file_path
-        self.document_paths = self.get_document_paths()
+        self.document_paths = self._get_document_paths()
 
-    def get_document_paths(self):
+    def _get_document_paths(self):
         """ Returns a list of the filepaths to all the documents in the corpus."""
         document_paths = []
         for document_folder in os.listdir(self.corpus_file_path):
@@ -116,7 +119,7 @@ class Corpus(object):
         """
         for path in self.document_paths:
             with open(path) as document_file_content:
-                yield document_file_content.read()[:2000]
+                yield document_file_content.read()
 
     def get_vocabulary(self):
         """
@@ -140,6 +143,42 @@ class Corpus(object):
 
         return vocabulary
 
+    def get_stats(self):
+        """ Prints statistics about the corpus with a formatted corpus file as input."""
+        start_time = time.time()
+        n_docs = 0
+        # Document size metrics expressed in number of features.
+        doc_size = 0
+        total_doc_size = 0
+        max_doc_size = 0
+        min_doc_size = 0
+        avg_doc_size = 0
+        for path in self.document_paths:
+            with open(path) as document_file_content:
+                doc_size = 0
+                for line in document_file_content:
+                    if not (line.startswith('<doc') or line.startswith('</doc>')):
+                        doc_size += len(line.split(' '))
+                # Update metric values
+                if n_docs == 0:
+                    min_doc_size = doc_size
+                n_docs += 1
+                print('Documents processed: ' + str(n_docs) +
+                      ', Rate: ' + str(round(n_docs/(time.time()-start_time))) + 'docs/sec')
+                total_doc_size += doc_size
+                if doc_size > max_doc_size:
+                    max_doc_size = doc_size
+                if doc_size < min_doc_size:
+                    min_doc_size = doc_size
+        avg_doc_size = total_doc_size/n_docs
+        print()
+        print()
+        print('Number of documents: ' + str(n_docs))
+        print()
+        print('Document size metrics: ')
+        print('    Max: ' + str(max_doc_size))
+        print('    Min: ' + str(min_doc_size))
+        print('    Average: ' + str(avg_doc_size))
 
 class ClusterMaker(object):
     """
@@ -223,11 +262,6 @@ class ClusterMaker(object):
         return kmodel
 
 
-@click.group(context_settings=CONTEXT_SETTINGS)
-def cli():
-    """ Command line interface for toolset.py."""
-    pass
-
 @cli.command()
 @click.argument('corpus')
 @click.option('--sub_size', default=None, type=int,
@@ -238,10 +272,6 @@ def format_corpus(**kwargs):
     """ Command to format the corpus."""
     if not os.path.exists(os.path.abspath(kwargs['corpus'])):
         print(os.path.abspath(kwargs['corpus']) + ' does not exist.')
-        sys.exit(1)
-
-    if not os.path.exists(os.path.abspath(kwargs['o'])):
-        print(os.path.abspath(kwargs['o']) + ' does not exist.')
         sys.exit(1)
 
     corpus = Corpus(os.path.abspath(kwargs['corpus']))
@@ -283,6 +313,17 @@ def kmeans(**kwargs):
         kmodel = cmaker.kmeans(corpus=corpus, tfidf_path=kwargs['tfidf'])
         # Dump the k-means model.
         joblib.dump(kmodel, 'km.pkl')
+
+@cli.command()
+@click.argument('corpus')
+def stats(**kwargs):
+    """ Command to print statistics."""
+    if not os.path.exists(os.path.abspath(kwargs['corpus'])):
+        print(os.path.abspath(kwargs['corpus']) + ' does not exist.')
+        sys.exit(1)
+    corpus = Corpus(os.path.abspath(kwargs['corpus']))
+    corpus.get_stats()
+
 
 if __name__ == "__main__":
     cli()
