@@ -16,8 +16,8 @@ from sklearn.pipeline import make_pipeline
 from sklearn.externals import joblib
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import Normalizer
-from sklearn.cluster import KMeans
-#import numpy as np
+from sklearn.cluster import KMeans, AgglomerativeClustering
+from sklearn.metrics.pairwise import cosine_similarity
 import nltk
 from nltk.stem.snowball import SnowballStemmer
 import click
@@ -207,7 +207,7 @@ class ClusterMaker(object):
         joblib.dump(features, 'features.pkl')
         return tfidf_matrix
 
-    def kmeans(self, corpus=None, tfidf_path=None):
+    def kmeans(self, corpus=None, tfidf_path=None, verbose=False):
         """ Applies kmeans clustering on the corpus and returns the kmeans model."""
         print("DEBUG Making cluster model")
 
@@ -225,8 +225,7 @@ class ClusterMaker(object):
             print('Performing latent semantic analysis')
             svd = TruncatedSVD(self.n_dimensions)
             # Normalize SVD results for better clustering results.
-            normalizer = Normalizer(copy=False)
-            lsa = make_pipeline(svd, normalizer)
+            lsa = make_pipeline(svd, Normalizer(copy=False))
             tfidf_matrix = lsa.fit_transform(tfidf_matrix)
             print(tfidf_matrix.shape)
             print('DEBUG LSA completed')
@@ -242,25 +241,74 @@ class ClusterMaker(object):
         #  cluster_labels = kmodel.labels_
         #  cluster_centers = kmodel.cluster_centers_
 
-        # Print some info.
-        print("Top terms per cluster:")
-        if self.n_dimensions != None:
-            original_space_centroids = svd.inverse_transform(kmodel.cluster_centers_)
-            order_centroids = original_space_centroids.argsort()[:, ::-1]
-        else:
-            order_centroids = kmodel.cluster_centers_.argsort()[:, ::-1]
+        if verbose:
+            # Print some info.
+            print("Top terms per cluster:")
+            if self.n_dimensions != None:
+                original_space_centroids = svd.inverse_transform(kmodel.cluster_centers_)
+                order_centroids = original_space_centroids.argsort()[:, ::-1]
+            else:
+                order_centroids = kmodel.cluster_centers_.argsort()[:, ::-1]
 
-        features = joblib.load('features.pkl')
-        for i in range(self.n_clusters):
-            print("Cluster %d:" % i, end='')
-            for ind in order_centroids[i, :10]:
-                print(' %s' % features[ind], end='')
-                print()
-        print(str(end_time-start_time))
+            features = joblib.load('features.pkl')
+            for i in range(self.n_clusters):
+                print("Cluster %d:" % i, end='')
+                for ind in order_centroids[i, :10]:
+                    print(' %s' % features[ind], end='')
+                    print()
+            print(str(end_time-start_time))
         print('Clustering completed after ' + str(round((end_time-start_time)/60)) + "' "
               + str(round((end_time-start_time)%60)) + "''")
         return kmodel
 
+    def hac(self, corpus=None, tfidf_path=None, verbose=False):
+        """ Apply Hierarchical Agglomerative Clustering on text data."""
+        # Compute or load Tf/Idf matrix.
+        if tfidf_path is None:
+            tfidf_matrix = self.extract_tfidf(corpus)
+            print(tfidf_matrix.shape)
+        else:
+            tfidf_matrix = joblib.load('tfidf.pkl')
+            print(tfidf_matrix.shape)
+            print('Loaded Tf/Idf matrix.')
+
+        # Apply latent semantic analysis.
+        if self.n_dimensions != None:
+            print('Performing latent semantic analysis')
+            svd = TruncatedSVD(self.n_dimensions)
+            # Normalize SVD results for better clustering results.
+            lsa = make_pipeline(svd, Normalizer(copy=False))
+            tfidf_matrix = lsa.fit_transform(tfidf_matrix)
+
+            print(tfidf_matrix.shape)
+            print('DEBUG LSA completed')
+
+
+        # Calculate documente distance matrix from Tf/Idf matrix
+        dist = 1 - cosine_similarity(tfidf_matrix)
+        print('DEBUG Computed distance matrix.')
+
+        start_time = time.time()
+        # Generate HAC model.
+        hac_model = AgglomerativeClustering(linkage='ward', n_clusters=self.n_clusters)
+        # Fit the model on the distance matrix.
+        hac_model.fit(dist)
+        end_time = time.time()
+        joblib.dump(hac_model, 'hac.pkl')
+        print('DEBUG Generated HAC model.')
+
+        if verbose:
+            # Visualize cluster model
+            children = hac_model.children_
+            merges = [{'node_id': node_id+len(dist),
+                       'right': children[node_id, 0], 'left': children[node_id, 1]
+                      } for node_id in range(0, len(children))]
+            for merge_entry in enumerate(merges):
+                print(merge_entry[1])
+
+        print('Clustering completed after ' + str(round((end_time-start_time)/60)) + "' "
+              + str(round((end_time-start_time)%60)) + "''")
+        return hac_model
 
 @cli.command()
 @click.argument('corpus')
@@ -296,6 +344,7 @@ def extract_tfidf(**kwargs):
               help='Reduce dimensions using Latent Semantic Analysis.')
 @click.option('--n_clusters', default=10,
               help='Set number of clusters.')
+@click.option('--verbose', is_flag=True, help='Print clustering information.')
 def kmeans(**kwargs):
     """ Click command to apply kmeans clustering."""
     if not os.path.exists(os.path.abspath(kwargs['corpus'])):
@@ -313,6 +362,35 @@ def kmeans(**kwargs):
         kmodel = cmaker.kmeans(corpus=corpus, tfidf_path=kwargs['tfidf'])
         # Dump the k-means model.
         joblib.dump(kmodel, 'km.pkl')
+
+@cli.command()
+@click.argument('corpus')
+@click.option('--tfidf', default=None,
+              help='Use a pre-computed Tf/Idf matrix')
+@click.option('--n_dimensions', default=None, type=int,
+              help='Reduce dimensions using Latent Semantic Analysis.')
+@click.option('--n_clusters', default=10,
+              help='Set number of clusters.')
+@click.option('--verbose', is_flag=True, help='Print clustering information.')
+def hac(**kwargs):
+    """ Click command to apply kmeans clustering."""
+    if not os.path.exists(os.path.abspath(kwargs['corpus'])):
+        print(os.path.abspath(kwargs['corpus']) + ' does not exist.')
+        sys.exit(1)
+
+    corpus = Corpus(os.path.abspath(kwargs['corpus']))
+    if kwargs['tfidf'] is None:
+        cmaker = ClusterMaker(kwargs['n_clusters'], kwargs['n_dimensions'])
+        hac_model = cmaker.hac(corpus=corpus, tfidf_path=kwargs['tfidf'],
+                               verbose=kwargs['verbose'])
+        # Dump the HAC model.
+        joblib.dump(hac_model, 'km.pkl')
+    else:
+        cmaker = ClusterMaker(kwargs['n_clusters'], kwargs['n_dimensions'])
+        hac_model = cmaker.hac(corpus=corpus, tfidf_path=kwargs['tfidf'],
+                               verbose=kwargs['verbose'])
+        # Dump the HAC model.
+        joblib.dump(hac_model, 'km.pkl')
 
 @cli.command()
 @click.argument('corpus')
