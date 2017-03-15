@@ -232,12 +232,15 @@ class ClusterMaker(object):
 
         # Do the clustering.
         start_time = time.time()
-        kmodel = KMeans(self.n_clusters, init='k-means++', n_init=1, max_iter=100,
-                        verbose=True)
-        print('Clustering with %s' % kmodel)
-        kmodel.fit(tfidf_matrix)
+        layer1_kmodel = KMeans(n_clusters=1000, init='k-means++', n_init=1, max_iter=100,
+                               verbose=True)
+        layer2_kmodel = KMeans(n_clusters=self.n_clusters, init='k-means++', n_init=1, max_iter=100,
+                               verbose=True)
+        print('Clustering with %s' % layer1_kmodel)
+        layer1_kmodel.fit(tfidf_matrix)
+        layer2_kmodel.fit(layer1_kmodel.cluster_centers_)
         end_time = time.time()
-        joblib.dump(kmodel, 'kmodel.pkl')
+        joblib.dump(layer2_kmodel, 'kmodel.pkl')
         #  cluster_labels = kmodel.labels_
         #  cluster_centers = kmodel.cluster_centers_
 
@@ -245,10 +248,10 @@ class ClusterMaker(object):
             # Print some info.
             print("Top terms per cluster:")
             if self.n_dimensions != None:
-                original_space_centroids = svd.inverse_transform(kmodel.cluster_centers_)
+                original_space_centroids = svd.inverse_transform(layer2_kmodel.cluster_centers_)
                 order_centroids = original_space_centroids.argsort()[:, ::-1]
             else:
-                order_centroids = kmodel.cluster_centers_.argsort()[:, ::-1]
+                order_centroids = layer2_kmodel.cluster_centers_.argsort()[:, ::-1]
 
             features = joblib.load('features.pkl')
             for i in range(self.n_clusters):
@@ -258,7 +261,7 @@ class ClusterMaker(object):
                     print()
         print('Clustering completed after ' + str(round((end_time-start_time)/60)) + "' "
               + str(round((end_time-start_time)%60)) + "''")
-        return kmodel
+        return layer2_kmodel
 
     def hac(self, corpus=None, tfidf_path=None, verbose=False):
         """ Apply Hierarchical Agglomerative Clustering on text data."""
@@ -353,12 +356,14 @@ def kmeans(**kwargs):
     corpus = Corpus(os.path.abspath(kwargs['corpus']))
     if kwargs['tfidf'] is None:
         cmaker = ClusterMaker(kwargs['n_clusters'], kwargs['n_dimensions'])
-        kmodel = cmaker.kmeans(corpus=corpus, tfidf_path=kwargs['tfidf'])
+        kmodel = cmaker.kmeans(corpus=corpus, tfidf_path=kwargs['tfidf'],
+                               verbose=kwargs['verbose'])
         # Dump the k-means model.
         joblib.dump(kmodel, 'km.pkl')
     else:
         cmaker = ClusterMaker(kwargs['n_clusters'], kwargs['n_dimensions'])
-        kmodel = cmaker.kmeans(corpus=corpus, tfidf_path=kwargs['tfidf'])
+        kmodel = cmaker.kmeans(corpus=corpus, tfidf_path=kwargs['tfidf'],
+                               verbose=kwargs['verbose'])
         # Dump the k-means model.
         joblib.dump(kmodel, 'km.pkl')
 
