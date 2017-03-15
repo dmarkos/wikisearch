@@ -256,7 +256,6 @@ class ClusterMaker(object):
                 for ind in order_centroids[i, :10]:
                     print(' %s' % features[ind], end='')
                     print()
-            print(str(end_time-start_time))
         print('Clustering completed after ' + str(round((end_time-start_time)/60)) + "' "
               + str(round((end_time-start_time)%60)) + "''")
         return kmodel
