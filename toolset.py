@@ -248,7 +248,8 @@ class ClusterMaker(object):
         layer1_kmodel.fit(tfidf_matrix)
         layer2_kmodel.fit(layer1_kmodel.cluster_centers_)
         end_time = time.time()
-        joblib.dump(layer2_kmodel, 'kmodel.pkl')
+        joblib.dump(layer1_kmodel, 'layer1_kmodel.pkl')
+        joblib.dump(layer2_kmodel, 'layer2_kmodel.pkl')
         #  cluster_labels = kmodel.labels_
         #  cluster_centers = kmodel.cluster_centers_
 
