@@ -8,6 +8,8 @@ import shutil
 import itertools
 import re
 import time
+import math
+import random
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 import pandas as pd
@@ -102,6 +104,12 @@ class Corpus(object):
                 # Each document file contains multiple documents each wrapped in a
                 # doc tag
                 for i, doc in enumerate(documents.findall("doc")):
+                    # To pick documents at random from the whole collection,
+                    # a document is picked with a possibility which depends on the
+                    # size of the sub-collection.
+                    pos = sub_size/5331608
+                    if random.random() > pos:
+                        continue
                     # Save each document in a separate file.
                     filepath = '/'.join([output_file_path, document_folder,
                                          document_file + '_' + str(i)])
@@ -232,9 +240,9 @@ class ClusterMaker(object):
 
         # Do the clustering.
         start_time = time.time()
-        layer1_kmodel = KMeans(n_clusters=1000, init='k-means++', n_init=1, max_iter=100,
+        layer1_kmodel = KMeans(n_clusters=100, init='k-means++', n_init=1, max_iter=10,
                                verbose=True)
-        layer2_kmodel = KMeans(n_clusters=self.n_clusters, init='k-means++', n_init=1, max_iter=100,
+        layer2_kmodel = KMeans(n_clusters=self.n_clusters, init='k-means++', n_init=1, max_iter=10,
                                verbose=True)
         print('Clustering with %s' % layer1_kmodel)
         layer1_kmodel.fit(tfidf_matrix)
