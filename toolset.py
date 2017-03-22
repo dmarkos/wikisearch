@@ -8,10 +8,10 @@ import shutil
 import itertools
 import re
 import time
-import math
 import random
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
+import pickle
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import make_pipeline
@@ -31,7 +31,6 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 def cli():
     """ Command line interface for toolset.py."""
     pass
-
 def tokenize(text):
     """ Takes a String as input and returns a list of its tokens. """
 
@@ -211,8 +210,8 @@ class ClusterMaker(object):
         features = vectorizer.get_feature_names()
         print(tfidf_matrix.shape)
         print("DEBUG Computed tfidf")
-        joblib.dump(tfidf_matrix, 'tfidf.pkl')
-        joblib.dump(features, 'features.pkl')
+        pickle.dump(tfidf_matrix, open('tfidf.pkl'))
+        pickle.dump(features, open('features.pkl'))
         return tfidf_matrix
 
     def kmeans(self, corpus=None, tfidf_path=None, verbose=False):
@@ -224,7 +223,7 @@ class ClusterMaker(object):
             tfidf_matrix = self.extract_tfidf(corpus)
             print(tfidf_matrix.shape)
         else:
-            tfidf_matrix = joblib.load('tfidf.pkl')
+            tfidf_matrix = pickle.load(open('tfidf.pkl', 'rb'))
             print(tfidf_matrix.shape)
             print('Loaded Tf/Idf matrix.')
 
@@ -249,8 +248,8 @@ class ClusterMaker(object):
         print('Clustering with %s' % layer2_kmodel)
         layer2_kmodel.fit(layer1_kmodel.cluster_centers_)
         end_time = time.time()
-        joblib.dump(layer1_kmodel, 'layer1_kmodel.pkl')
-        joblib.dump(layer2_kmodel, 'layer2_kmodel.pkl')
+        pickle.dump(layer1_kmodel, open('layer1_kmodel.pkl'))
+        pickle.dump(layer2_kmodel, open('layer2_kmodel.pkl'))
         #  cluster_labels = kmodel.labels_
         #  cluster_centers = kmodel.cluster_centers_
 
@@ -280,7 +279,7 @@ class ClusterMaker(object):
             tfidf_matrix = self.extract_tfidf(corpus)
             print(tfidf_matrix.shape)
         else:
-            tfidf_matrix = joblib.load('tfidf.pkl')
+            tfidf_matrix = pickle.load(open('tfidf.pkl', 'rb'))
             print(tfidf_matrix.shape)
             print('Loaded Tf/Idf matrix.')
 
