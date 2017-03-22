@@ -246,6 +246,7 @@ class ClusterMaker(object):
                                verbose=True)
         print('Clustering with %s' % layer1_kmodel)
         layer1_kmodel.fit(tfidf_matrix)
+        print('Clustering with %s' % layer2_kmodel)
         layer2_kmodel.fit(layer1_kmodel.cluster_centers_)
         end_time = time.time()
         joblib.dump(layer1_kmodel, 'layer1_kmodel.pkl')
@@ -314,6 +315,9 @@ class ClusterMaker(object):
             merges = [{'node_id': node_id+len(dist),
                        'right': children[node_id, 0], 'left': children[node_id, 1]
                       } for node_id in range(0, len(children))]
+            joblib.dump(merges, 'merges.pkl')
+            joblib.dump(children, 'children.pkl')
+
             for merge_entry in enumerate(merges):
                 print(merge_entry[1])
 
