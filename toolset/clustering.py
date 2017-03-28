@@ -1,5 +1,9 @@
+# -*- coding: utf-8 -*-
+""" Provides methods for applying clustering on a text document collection.
+"""
+import re
+import time
 import pickle
-import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import make_pipeline
 from sklearn.externals import joblib
@@ -11,8 +15,16 @@ import nltk
 from nltk.stem.snowball import SnowballStemmer
 
 def tokenize(text):
-    """ Takes a String as input and returns a list of its tokens. """
+    """ Takes a String as input and returns a list of its tokens.
 
+        Args:
+            text (str): A string object.
+
+        Returns:
+            filtered_tokens: A list of the tokens in the string after removing
+                duplicates and tokens that contain only numbers.
+
+    """
     filtered_tokens = []
     tokens = [word.lower() for sent in nltk.sent_tokenize(text) for word in
               nltk.word_tokenize(sent)]
@@ -23,20 +35,54 @@ def tokenize(text):
     return filtered_tokens
 
 def stem(tokens):
-    """ Takes a list of tokens as input and stems each entry. """
+    """ Takes a list of tokens as input and stems each entry.
+
+        NLTK's SnowballStemmer is used for the stemming.
+
+        Args:
+            tokens (:list:'str'): A list of tokens.
+        Returns:
+            stems (:list:'str'): The list containing the stems of the tokens
+            given as input.
+
+    """
     stemmer = SnowballStemmer('english')
-    return [stemmer.stem(token) for token in tokens]
+    stems = [stemmer.stem(token) for token in tokens]
+
+    return stems
 
 def tokenizer(text):
-    """ Tokenizes and then stems a given text. """
-    return stem(tokenize(text))
+    """ Tokenizes and then stems a given text.
 
+    Simply combines the tokenize() and stem() methods. This method is used
+    by by the TfidfVectorizer for the calculation of the Tf/Idf matrix.
+
+    Args:
+        text (str): A string object.
+
+    Returns:
+        stems (:list:'str'): A list containing the stems of the input string.
+    """
+    stems = stem(tokenize(text))
+    return stems
 
 
 class ClusterMaker(object):
-    """
-    Applies clustering on text data using the kmeans algorithm and pickles the kmeans
-    model. Enables cluster information extraction and visualization.
+    """ Wrapper for quickly applying some clustering algorithms.
+
+    Applies clustering using the kmeans or hac algorithm.
+
+    Args:
+        n_clusters (int): The number of clusters to be created.
+        n_dimensions (int): When given a value, specifies the number of dimensions
+            of the vector space after applying Latent Semantic Analysis. Defaults
+            to None.
+
+    Attributes:
+        n_clusters (int): The number of clusters to be created.
+        n_dimensions (int): When given a value, specifies the number of dimensions
+            of the vector space after applying Latent Semantic Analysis. Defaults
+            to None.
     """
     def __init__(self, n_clusters, n_dimensions=None):
         self.n_clusters = n_clusters
@@ -44,7 +90,18 @@ class ClusterMaker(object):
 
     @staticmethod
     def extract_tfidf(corpus):
-        """ Returns the Tf/Idf matrix of the corpus and pickles Tf/Idf matrix and feature list."""
+        """ Calculates the Tf/Idf matrix of the document collection.
+
+        The Tf/Idf matrix is in sparse matrix format. After calculation,
+        the matrix and the features of the collection are saved in files.
+
+        Args:
+            corpus (:obj:'Corpus'): The Corpus object of the document collection.
+
+        Returns:
+           tfidf_matrix (sparse matrix): The Tf/idf matrix of the document collection.
+
+        """
         # Initialize the vectorizer.
         vectorizer = TfidfVectorizer(max_df=0.5, min_df=2, max_features=10000,
                                      use_idf=True, stop_words='english',
@@ -61,7 +118,25 @@ class ClusterMaker(object):
         return tfidf_matrix
 
     def kmeans(self, corpus=None, tfidf_path=None, verbose=False):
-        """ Applies kmeans clustering on the corpus and returns the kmeans model."""
+        """ Applies kmeans clustering on a document collection.
+
+        The clustering is performed in two steps creating two cluster layers. First,
+        the collection is clustered into a big number of clusters. Next, the cluster
+        centers of the created clusters are clustered resulting to K clusters.
+
+        Args:
+            corpus (:obj:'Corpus'): The Corpus object of the document collection.
+                Defaults to None. Only used when no pre-computed Tf/Idf matrix is
+                given.
+            tfidf_path (str): The path to the file containing the Tf/Idf matrix .pkl file.
+                Defaults to None and in this case the Tf/Idf matrix is calculated.
+            verbose (bool): When True additional information will be printed.
+                Defaults to False.
+
+        Returns:
+            layer2_kmodel (:obj:'Kmeans'): The second layer of clusters.
+
+        """
         print("DEBUG Making cluster model")
 
         # Compute or load Tf/Idf matrix.
@@ -120,7 +195,31 @@ class ClusterMaker(object):
         return layer2_kmodel
 
     def hac(self, corpus=None, tfidf_path=None, verbose=False):
-        """ Apply Hierarchical Agglomerative Clustering on text data."""
+        """ Apply Hierarchical Agglomerative Clustering on a document collection.
+
+        This method generates a hierarchical clustering tree for the collection and stops
+        when there are K clusters without merging all the way up to a root node. The leaves
+        of the tree are clusters consisting of single documents. The tree is then saved by
+        saving the list of merges in a file.
+
+        Each entry of this list contains the two tree nodes that were merged to create a
+        new node and the new node's id. Node ids less than the number of leaves represent
+        leaves, while node ids greater than the number of leaves indicate internal nodes.
+
+        Args:
+            corpus (:obj:'Corpus'): The Corpus object of the document collection.
+                Defaults to None. Only used when no pre-computed Tf/Idf matrix is
+                given.
+            tfidf_path (str): The path to the file containing the Tf/Idf matrix .pkl file.
+                Defaults to None and in this case the Tf/Idf matrix is calculated.
+            verbose (bool): When True additional information will be printed.
+                Defaults to False.
+
+        Returns:
+            hac_model (:obj:'AgglomerativeClustering'): The HAC model fitted on the
+                document collection.
+
+        """
         # Compute or load Tf/Idf matrix.
         if tfidf_path is None:
             tfidf_matrix = self.extract_tfidf(corpus)
