@@ -13,6 +13,7 @@ from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.metrics.pairwise import cosine_similarity
 import nltk
 from nltk.stem.snowball import SnowballStemmer
+import pandas as pd
 
 def tokenize(text):
     """ Takes a String as input and returns a list of its tokens.
@@ -144,7 +145,7 @@ class ClusterMaker(object):
             tfidf_matrix = self.extract_tfidf(corpus)
             print(tfidf_matrix.shape)
         else:
-            tfidf_matrix = pickle.load(open('tfidf.pkl', 'rb'))
+            tfidf_matrix = pickle.load(open(tfidf_path, 'rb'))
             print(tfidf_matrix.shape)
             print('Loaded Tf/Idf matrix.')
 
@@ -169,11 +170,21 @@ class ClusterMaker(object):
         print('Clustering with %s' % layer2_kmodel)
         layer2_kmodel.fit(layer1_kmodel.cluster_centers_)
         end_time = time.time()
+
+        # Create a matching of the clusters and the ids of the documents they contain.
+        cluster_doc = pd.Series()
+        for i in range(layer1_kmodel.n_clusters):
+            ids = []
+            for docid, cluster in enumerate(layer1_kmodel.labels_):
+                if cluster == i:
+                    ids.append(docid)
+                    cluster_doc.loc[i] = ids
+
+
         pickle.dump(layer1_kmodel, open('layer1_kmodel.pkl', 'wb'))
         pickle.dump(layer1_kmodel.cluster_centers_, open('centers.pkl', 'wb'))
         pickle.dump(layer2_kmodel, open('layer2_kmodel.pkl', 'wb'))
-        #  cluster_labels = kmodel.labels_
-        #  cluster_centers = kmodel.cluster_centers_
+        pickle.dump(cluster_doc, open('cluster_doc.pkl', 'wb'))
 
         if verbose:
             # Print some info.
@@ -225,7 +236,7 @@ class ClusterMaker(object):
             tfidf_matrix = self.extract_tfidf(corpus)
             print(tfidf_matrix.shape)
         else:
-            tfidf_matrix = pickle.load(open('tfidf.pkl', 'rb'))
+            tfidf_matrix = pickle.load(open(tfidf_path, 'rb'))
             print(tfidf_matrix.shape)
             print('Loaded Tf/Idf matrix.')
 
