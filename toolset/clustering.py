@@ -114,6 +114,7 @@ class ClusterMaker(object):
         features = vectorizer.get_feature_names()
         print(tfidf_matrix.shape)
         print("DEBUG Computed tfidf")
+
         pickle.dump(tfidf_matrix, open('tfidf.pkl', 'wb'))
         pickle.dump(features, open('features.pkl', 'wb'))
         return tfidf_matrix
@@ -195,7 +196,7 @@ class ClusterMaker(object):
             else:
                 order_centroids = layer2_kmodel.cluster_centers_.argsort()[:, ::-1]
 
-            features = joblib.load('features.pkl')
+            features = pickle.load(open('features.pkl', 'rb'))
             for i in range(self.n_clusters):
                 print("Cluster %d:" % i, end='')
                 for ind in order_centroids[i, :10]:
@@ -262,7 +263,7 @@ class ClusterMaker(object):
         # Fit the model on the distance matrix.
         hac_model.fit(dist)
         end_time = time.time()
-        joblib.dump(hac_model, 'hac.pkl')
+        pickle.dump(hac_model, open('hac.pkl', 'wb'))
         print('DEBUG Generated HAC model.')
 
         if verbose:
@@ -271,8 +272,8 @@ class ClusterMaker(object):
             merges = [{'node_id': node_id+len(dist),
                        'right': children[node_id, 0], 'left': children[node_id, 1]
                       } for node_id in range(0, len(children))]
-            joblib.dump(merges, 'merges.pkl')
-            joblib.dump(children, 'children.pkl')
+            pickle.dump(merges, open('merges.pkl', 'wb'))
+            pickle.dump(children, open('children.pkl', 'wb'))
 
             for merge_entry in enumerate(merges):
                 print(merge_entry[1])
