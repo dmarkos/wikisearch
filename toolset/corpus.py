@@ -32,6 +32,7 @@ class Corpus(object):
         self.corpus_file_path = corpus_file_path
         self.document_paths = self._get_document_paths()
 
+
     def _get_document_paths(self):
         """ Returns the filepaths of all the documents in the collection in a list
 
@@ -185,3 +186,18 @@ class Corpus(object):
         print('    Max: ' + str(max_doc_size))
         print('    Min: ' + str(min_doc_size))
         print('    Average: ' + str(avg_doc_size))
+
+    def get_title(self, docid):
+        """ Get the title of a document by id.
+
+        Each document's id depends on the order in which it got processed. For example,
+        the document with id=5 was the fifth document to be processed.
+
+        Returns:
+            title (str): The title of the document.
+
+        """
+
+        with open(self.document_paths[docid]) as document_file:
+            return document_file.readlines()[1].strip()
+

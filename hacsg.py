@@ -3,6 +3,9 @@
 
 import time
 import math
+import os
+import shutil
+import pickle
 
 
 def scatter(hac_model, working_set, n_clusters):
@@ -75,7 +78,7 @@ def get_docs(cluster_id, hac_model, cluster_doc):
 
     return docs
 
-def browse(hac_model, n_clusters):
+def browse(corpus, hac_model, n_clusters):
     """ Simulates Scatter/Gather browsing.
 
     Args:
@@ -89,6 +92,10 @@ def browse(hac_model, n_clusters):
     root_id = hac_model.n_leaves_ + len(hac_model.children_) - 1
     # Generate the inital cluster working set.
     working_set = scatter(hac_model, [root_id], n_clusters)
+    curr_dir = os.getcwd()
+    if os.path.exists(curr_dir + '/simulation'):
+        shutil.rmtree(curr_dir + '/simulation') # Overwrite directory if it exists.
+    os.makedirs(curr_dir + '/simulation')
 
     for i in range(5):
         start_time = time.time()
@@ -98,7 +105,17 @@ def browse(hac_model, n_clusters):
         working_set = scatter(hac_model, working_set, n_clusters)
         print('Iteration: ' + str(i+1) + ' - ' + str(round((time.time()-start_time)/60)) + "' "
               + str(round((time.time()-start_time)%60)) + "''")
+        # Log iteration result by saving each cluster's document titles.
+        cluster_doc = pickle.load(open('cluster_doc.pkl', 'rb'))
+        iter_dir_path = curr_dir + '/simulation/' + str(i+1)
+        os.makedirs(iter_dir_path)
+
+        for cluster_id in working_set:
+            cluster_filepath = iter_dir_path + '/' + str(cluster_id)
+            with open(cluster_filepath, 'w+') as cluster_file:
+                doc_titles = [corpus.get_title(docid)
+                              for docid in get_docs(cluster_id, hac_model, cluster_doc)]
+                cluster_file.write('\n'.join(doc_titles))
 
         if sorted(working_set).pop() < hac_model.n_leaves_:
             break # Only leaves remain in the working set.
-
