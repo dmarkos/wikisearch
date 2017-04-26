@@ -32,7 +32,6 @@ class Corpus(object):
         self.corpus_file_path = corpus_file_path
         self.document_paths = self._get_document_paths()
 
-
     def _get_document_paths(self):
         """ Returns the filepaths of all the documents in the collection in a list
 
