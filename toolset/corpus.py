@@ -100,13 +100,13 @@ class Corpus(object):
                     # To pick documents at random from the whole collection,
                     # a document is picked with a possibility which depends on the
                     # size of the sub-collection.
-                    pos = float(10000)/(5*pow(10, 6))
+                    pos = float(sub_size)/(5*pow(10, 6))
                     if sub_size != None and random.random() > pos:
                         continue
                     # Save each document in a separate file.
                     filepath = '/'.join([output_file_path, document_folder,
                                          document_file + '_' + str(i)])
-                    with open(filepath, 'w+') as output_document_file:
+                    with open(filepath, 'wb+') as output_document_file:
                         output_document_file.write(doc.text.encode('utf-8'))
                     # If a subcollection size has been specified, stop when it is
                     # reached
@@ -204,4 +204,3 @@ class Corpus(object):
 
         with open(self.document_paths[docid]) as document_file:
             return document_file.readlines()[1].strip()
-
