@@ -10,6 +10,7 @@ import shutil
 import itertools
 import random
 import time
+import math
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 import pandas as pd
@@ -68,7 +69,9 @@ class Corpus(object):
         if os.path.exists(output_file_path):
             shutil.rmtree(output_file_path)
             os.makedirs(output_file_path)
+
         n_docs = 0
+        start_time = time.time()
 
         for document_folder in os.listdir(self.corpus_file_path):
             os.makedirs(output_file_path + '/' + document_folder)
@@ -97,17 +100,19 @@ class Corpus(object):
                     # To pick documents at random from the whole collection,
                     # a document is picked with a possibility which depends on the
                     # size of the sub-collection.
-                    pos = sub_size/5331608
-                    if random.random() > pos:
+                    pos = float(10000)/(5*pow(10, 6))
+                    if sub_size != None and random.random() > pos:
                         continue
                     # Save each document in a separate file.
                     filepath = '/'.join([output_file_path, document_folder,
                                          document_file + '_' + str(i)])
                     with open(filepath, 'w+') as output_document_file:
-                        output_document_file.write(doc.text)
+                        output_document_file.write(doc.text.encode('utf-8'))
                     # If a subcollection size has been specified, stop when it is
                     # reached
                     n_docs += 1
+                    print('Picked ' + str(n_docs) + '/' + str(sub_size) + ' articles. ' +
+                          '(' + str(math.floor(n_docs/(time.time()-start_time))) + ' docs/s)')
                     if sub_size != None and n_docs >= sub_size:
                         return 0
 

@@ -186,9 +186,9 @@ class ClusterMaker(object):
 
             features = pickle.load(open('features.pkl', 'rb'))
             for i in range(n_clusters):
-                print("Cluster %d:" % i, end='')
+                print("Cluster %d:" % i)
                 for ind in order_centroids[i, :10]:
-                    print(' %s' % features[ind], end='')
+                    print(' %s' % features[ind])
                     print()
         print('Clustering completed after ' + str(round((end_time-start_time)/60)) + "' "
               + str(round((end_time-start_time)%60)) + "''")
