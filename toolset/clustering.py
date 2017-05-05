@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """ Provides methods for applying clustering on a text document collection.
 """
-import pickle
+import joblib
 import re
 import time
 
@@ -10,7 +10,7 @@ import pandas as pd
 from nltk.stem.snowball import SnowballStemmer
 from sklearn.cluster import AgglomerativeClustering, MiniBatchKMeans
 from sklearn.decomposition import TruncatedSVD
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import HashingVectorizer, TfidfTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import Normalizer
@@ -110,25 +110,21 @@ class ClusterMaker(object):
                collection.
 
         """
+        print('Constructing Tf/Idf matrix...')
         # Initialize the vectorizer.
-        vectorizer = TfidfVectorizer(
-            max_df=0.5,
-            min_df=2,
-            max_features=10000,
-            use_idf=True,
-            stop_words='english',
-            tokenizer=tokenizer,
-            ngram_range=(1, 3))
-        print("DEBUG Created vectorizer")
+        hasher = HashingVectorizer(n_features=10000, stop_words='english',
+                                   non_negative=True, norm=None, binary=False)
+        vactorizer = make_pipeline(hasher, TfidfTransformer())
+        
         # Compute the Tf/Idf matrix of the corpus.
         tfidf = vectorizer.fit_transform(
             self.corpus.document_generator())
+
         # Get feature names from the fitted vectorizer.
         features = vectorizer.get_feature_names()
-        print(tfidf.shape)
-        print("DEBUG Computed tfidf")
-        pickle.dump(tfidf, open('tfidf.txt', 'wb'))
-        pickle.dump(features, open('features.txt', 'wb'))
+        joblib.dump(tfidf, 'tfidf.pkl')
+        joblib.dump(features, 'features.pkl')
+
         return tfidf
 
     def kmeans(self,
@@ -152,34 +148,30 @@ class ClusterMaker(object):
             kmodel (:obj:'Kmeans'): Scikit KMeans clustering model.
 
         """
-        print("DEBUG Making cluster model")
-
+        
         # Compute or load Tf/Idf matrix.
         if tfidf is None:
             tfidf = self.extract_tfidf(self.corpus)
             print(tfidf.shape)
 
-        print('Loaded Tf/Idf matrix.')
-
         # Apply latent semantic analysis.
         if n_dimensions is not None:
-            print('Performing latent semantic analysis')
+            print('Performing latent semantic analysis...')
             svd = TruncatedSVD(n_dimensions)
             # Normalize SVD results for better clustering results.
             lsa = make_pipeline(svd, Normalizer(copy=False))
             tfidf = lsa.fit_transform(tfidf)
             print(tfidf.shape)
-            print('DEBUG LSA completed')
 
         # Do the clustering.
         start_time = time.time()
+        print('Clustering...')
         kmodel = MiniBatchKMeans(
             n_clusters=n_clusters,
             init='k-means++',
             n_init=1,
             max_iter=10,
             verbose=True)
-        print('Clustering with %s' % kmodel)
         kmodel.fit(tfidf)
         end_time = time.time()
 
@@ -259,8 +251,6 @@ class ClusterMaker(object):
             tfidf = self.extract_tfidf(self.corpus)
             print(tfidf.shape)
 
-        print('Loaded Tf/Idf matrix.')
-
         # Apply latent semantic analysis.
         if n_dimensions is not None:
             print('Performing latent semantic analysis')
@@ -270,13 +260,13 @@ class ClusterMaker(object):
             tfidf = lsa.fit_transform(tfidf)
 
             print(tfidf.shape)
-            print('DEBUG LSA completed')
 
         # Calculate documente distance matrix from Tf/Idf matrix
+        print('Constructing distance matrix...')
         dist = 1 - cosine_similarity(tfidf)
-        print('DEBUG Computed distance matrix.')
 
         start_time = time.time()
+        print('Clustering...')
         # Generate HAC model.
         hac_model = AgglomerativeClustering(
             linkage='ward', n_clusters=n_clusters)
@@ -284,7 +274,6 @@ class ClusterMaker(object):
         hac_model.fit(dist)
         end_time = time.time()
         pickle.dump(hac_model, open('hac.pkl', 'wb'))
-        print('DEBUG Generated HAC model.')
 
         if verbose:
             # Visualize cluster model
