@@ -114,7 +114,7 @@ class ClusterMaker(object):
         # Initialize the vectorizer.
         hasher = HashingVectorizer(n_features=10000, stop_words='english',
                                    non_negative=True, norm=None, binary=False)
-        vactorizer = make_pipeline(hasher, TfidfTransformer())
+        vectorizer = make_pipeline(hasher, TfidfTransformer())
         
         # Compute the Tf/Idf matrix of the corpus.
         tfidf = vectorizer.fit_transform(
