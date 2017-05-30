@@ -102,9 +102,10 @@ class Corpus(object):
                 # doc tag
                 for i, doc in enumerate(documents.findall("doc")):
                     # Pick documents at random from the whole collection.
-                    pos = float(sub_size) / (5 * pow(10, 6))
-                    if sub_size != None and random.random() > pos:
-                        continue
+                    if sub_size != None:
+                        pos = float(sub_size) / (5 * pow(10, 6))
+                        if random.random() > pos:
+                            continue
                     # Save each document in a separate file.
                     filepath = '/'.join([
                         output_file_path, document_folder,
