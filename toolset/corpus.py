@@ -48,6 +48,29 @@ class Corpus(object):
                 document_paths.append(self.corpus_file_path + '/' +
                                       document_folder + '/' + document_file)
         return document_paths
+    
+    def remove_articles(self,article_list):
+        """ Removes specific articles from the collection - Backup before using
+
+
+        Arguments:
+            article_list (list): The list of the article titles that will be removed from the collection.
+
+        """
+        n_art = 0
+        start_time = time.time()
+        #Open every document and check if its title is in the given list. Then delete the document and its entry in the list.
+        for path in self.document_paths:
+            with open(path) as document_content:
+                article_title = document_content.readlines()[1].strip()
+                if article_title in article_list:
+                    n_art += 1
+                    print("Removed", n_art, article_title)
+                    article_list.remove(article_title)
+                    os.remove(path)
+        
+        print("Removed", n_art , "articles in", time.time() - start_time)
+    
 
     def format(self,
                sub_size=None,
@@ -90,7 +113,7 @@ class Corpus(object):
                     for line in document_file_content.readlines():
                         if (not line.startswith('<doc id') and
                                 not line.startswith('</doc>')):
-                            document_file_content_escaped.append(escape(line))
+                            document_file_content_escaped.append(escape(line))##
                         else:
                             document_file_content_escaped.append(line)
 
